@@ -263,7 +263,11 @@ const AuthPage: React.FC<{
 
 const App: React.FC = () => {
   const [users, setUsers] = useState<User[]>(INITIAL_USERS);
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    // Tenta carregar o utilizador do localStorage ao iniciar
+    const savedUser = localStorage.getItem('swimref-user');
+    return savedUser ? JSON.parse(savedUser) : null;
+  });
   const [competitions, setCompetitions] = useState<Competition[]>(INITIAL_COMPETITIONS);
   const [craMembers, setCraMembers] = useState<CRAMember[]>(INITIAL_CRA_MEMBERS);
   const [craConfig, setCraConfig] = useState<CRAConfig>(INITIAL_CRA_CONFIG);
@@ -273,7 +277,7 @@ const App: React.FC = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [compToDeleteId, setCompToDeleteId] = useState<string | null>(null);
   
-  const [viewMode, setViewMode] = useState<'list' | 'calendar' | 'profile' | 'settings' | 'admin' | 'contacts'>('contacts');
+  const [viewMode, setViewMode] = useState<'list' | 'calendar' | 'profile' | 'settings' | 'admin' | 'contacts'>('list');
   const [viewDate, setViewDate] = useState(new Date());
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -289,9 +293,18 @@ const App: React.FC = () => {
   
   useEffect(() => {
     if (currentUser) {
+      // Guarda o utilizador no localStorage sempre que ele muda
+      localStorage.setItem('swimref-user', JSON.stringify(currentUser));
       setEditProfile({ name: currentUser.name, role: currentUser.role });
+    } else {
+      // Remove o utilizador do localStorage se ele fizer logout
+      localStorage.removeItem('swimref-user');
     }
   }, [currentUser]);
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+  };
 
   const isAdmin = currentUser?.role === 'Administrador';
   const canManage = isAdmin;
@@ -676,7 +689,7 @@ const App: React.FC = () => {
             <button type="submit" className="flex-1 bg-blue-600 text-white py-4 rounded-2xl font-bold shadow-xl shadow-blue-100 transition-all active:scale-95">
               Atualizar Perfil
             </button>
-            <button type="button" onClick={() => setCurrentUser(null)} className="flex items-center gap-2 px-6 py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold text-sm hover:bg-slate-200 transition-colors">
+            <button type="button" onClick={handleLogout} className="flex items-center gap-2 px-6 py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold text-sm hover:bg-slate-200 transition-colors">
               <LogOutIcon />
               Sair
             </button>
