@@ -1,0 +1,7 @@
+{
+  "name": "SwimRef - Gestor de Eventos para Árbitros de Natação",
+  "description": "Uma plataforma profissional para árbitros de natação gerenciarem competições, acompanharem presenças e coordenarem detalhes de torneios.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
