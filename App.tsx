@@ -34,11 +34,9 @@ import {
   FileTextIcon,
   CameraIcon,
   GoogleIcon,
-  LogOutIcon,
-  SparklesIcon
+  LogOutIcon
 } from './components/Icons';
 import AdminPanel from './components/AdminPanel';
-import BriefingModal from './components/BriefingModal';
 
 const DEFAULT_PREFERENCES: NotificationPreferences = {
   newCompetitions: true,
@@ -293,10 +291,6 @@ const App: React.FC = () => {
   });
   const [isProfileUpdated, setIsProfileUpdated] = useState(false);
   
-  const [showBriefingModal, setShowBriefingModal] = useState(false);
-  const [isBriefingLoading, setIsBriefingLoading] = useState(false);
-  const [briefingContent, setBriefingContent] = useState('');
-  
   useEffect(() => {
     if (currentUser) {
       // Guarda o utilizador no localStorage sempre que ele muda
@@ -440,41 +434,6 @@ const App: React.FC = () => {
       }
       return c;
     }));
-  };
-
-  const handleGenerateBriefing = async (competition: Competition) => {
-    if (!canManage) return;
-
-    const attendees = users.filter(user => 
-        competition.rsvps.some(rsvp => rsvp.userId === user.id && rsvp.status === RSVPStatus.ATTENDING)
-    );
-    
-    setShowBriefingModal(true);
-    setIsBriefingLoading(true);
-    setBriefingContent('');
-
-    try {
-        const response = await fetch('/api/generate-briefing', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ competition, attendees }),
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'Falha na resposta da API');
-        }
-
-        const data = await response.json();
-        setBriefingContent(data.briefing);
-    } catch (error) {
-        console.error("Erro ao chamar a API de briefing:", error);
-        setBriefingContent("Ocorreu um erro ao gerar o briefing. Por favor, verifique a consola e tente novamente.");
-    } finally {
-        setIsBriefingLoading(false);
-    }
   };
 
   const filteredCompetitions = useMemo(() => {
@@ -960,9 +919,12 @@ const App: React.FC = () => {
             </div>
             
             <div className="flex items-center gap-2 shrink-0">
-              {canManage && <button onClick={() => handleGenerateBriefing(selectedComp)} className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-2xl font-bold transition-all shadow-lg shadow-purple-100"><SparklesIcon /> Gerar Briefing</button>}
               {canManage && <button onClick={handleEditClick} className="p-3 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-2xl transition-all border border-transparent hover:border-blue-100" title="Editar Competição"><EditIcon /></button>}
               {isAdmin && <button onClick={() => { setCompToDeleteId(selectedComp.id); setShowDeleteModal(true); }} className="p-3 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-2xl transition-all border border-transparent hover:border-rose-100" title="Eliminar Competição"><TrashIcon /></button>}
+              <button onClick={handleGetDirections} className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-2xl font-bold transition-all shadow-lg shadow-blue-100">
+                <MapPinIcon />
+                <span>Obter Direções</span>
+              </button>
             </div>
           </div>
 
@@ -1151,13 +1113,6 @@ const App: React.FC = () => {
       <main className="flex-1 max-w-7xl mx-auto px-6 py-10 w-full">
         {renderMainContent()}
       </main>
-      
-      <BriefingModal
-        isOpen={showBriefingModal}
-        onClose={() => setShowBriefingModal(false)}
-        content={briefingContent}
-        isLoading={isBriefingLoading}
-      />
 
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm">
