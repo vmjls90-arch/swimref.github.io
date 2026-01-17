@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Competition, RSVP, RSVPStatus, User, UserRole, Notification, PaymentLog, NotificationPreferences, CompetitionDocument, UserStatus, CRAMember, CRAConfig } from './types';
 import { 
@@ -34,9 +33,12 @@ import {
   FileTextIcon,
   CameraIcon,
   GoogleIcon,
-  LogOutIcon
+  LogOutIcon,
+  SparklesIcon
 } from './components/Icons';
 import AdminPanel from './components/AdminPanel';
+import BriefingModal from './components/BriefingModal';
+import { generateCompetitionBriefing } from './services/geminiService';
 
 const DEFAULT_PREFERENCES: NotificationPreferences = {
   newCompetitions: true,
@@ -60,11 +62,9 @@ const INITIAL_CRA_CONFIG: CRAConfig = {
 };
 
 const INITIAL_USERS: User[] = [
-  { id: 'u1', name: 'Alex Johnson', email: 'admin@poolref.com', role: 'Administrador', status: UserStatus.APPROVED, preferences: { ...DEFAULT_PREFERENCES }, profilePictureUrl: undefined },
-  { id: 'u2', name: 'Sarah Thompson', email: 'sarah@poolref.com', role: 'Árbitro', status: UserStatus.APPROVED, preferences: { ...DEFAULT_PREFERENCES }, profilePictureUrl: undefined },
-  { id: 'u3', name: 'Miguel Silva', email: 'miguel@poolref.com', role: 'Árbitro', status: UserStatus.APPROVED, preferences: { ...DEFAULT_PREFERENCES }, profilePictureUrl: undefined },
-  { id: 'u4', name: 'Joana Ferreira', email: 'joana@poolref.com', role: 'Árbitro', status: UserStatus.PENDING, preferences: { ...DEFAULT_PREFERENCES }, profilePictureUrl: undefined },
-  { id: 'u5', name: 'Ricardo Santos', email: 'ricardo@poolref.com', role: 'Árbitro', status: UserStatus.APPROVED, preferences: { ...DEFAULT_PREFERENCES }, profilePictureUrl: undefined },
+  { id: 'u1', name: 'Administrador Principal', email: 'admin@swimref.com', role: 'Administrador', status: UserStatus.APPROVED, preferences: { ...DEFAULT_PREFERENCES } },
+  { id: 'u2', name: 'Sarah Thompson', email: 'sarah@poolref.com', role: 'Árbitro', status: UserStatus.APPROVED, preferences: { ...DEFAULT_PREFERENCES } },
+  { id: 'u3', name: 'Miguel Silva', email: 'miguel@poolref.com', role: 'Árbitro', status: UserStatus.APPROVED, preferences: { ...DEFAULT_PREFERENCES } },
 ];
 
 const INITIAL_COMPETITIONS: Competition[] = [
@@ -78,10 +78,10 @@ const INITIAL_COMPETITIONS: Competition[] = [
     level: 'Nacional',
     isPaid: true,
     paymentHistory: [
-      { id: 'pl-init-1', userName: 'Alex Johnson', status: true, timestamp: '2024-05-10T10:00:00Z' }
+      { id: 'pl-init-1', userName: 'Administrador Principal', status: true, timestamp: '2024-05-10T10:00:00Z' }
     ],
     rsvps: [
-      { id: 'r1', userId: 'u1', userName: 'Alex Johnson', userRole: 'Administrador', status: RSVPStatus.ATTENDING, comment: '', timestamp: '2024-05-10T10:00:00Z' },
+      { id: 'r1', userId: 'u1', userName: 'Administrador Principal', userRole: 'Administrador', status: RSVPStatus.ATTENDING, comment: '', timestamp: '2024-05-10T10:00:00Z' },
       { id: 'r2', userId: 'u3', userName: 'Miguel Silva', userRole: 'Árbitro', status: RSVPStatus.ATTENDING, comment: 'Disponível tarde', timestamp: '2024-05-11T10:00:00Z' }
     ],
     documents: [],
@@ -127,7 +127,7 @@ const AuthPage: React.FC<{
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    const user = users.find(u => u.email === email);
+    const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
     if (user) {
       if (user.status === UserStatus.PENDING) {
         setError('A sua conta está pendente de aprovação por um administrador.');
@@ -138,13 +138,13 @@ const AuthPage: React.FC<{
         return;
       }
     }
-    setError('Credenciais inválidas. Por favor, tente novamente.');
+    setError('Utilizador não encontrado ou credenciais inválidas.');
   };
   
   const handleRegister = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    if (users.some(u => u.email === email)) {
+    if (users.some(u => u.email.toLowerCase() === email.toLowerCase())) {
       setError('Este endereço de email já está a ser utilizado.');
       return;
     }
@@ -159,17 +159,34 @@ const AuthPage: React.FC<{
   };
 
   const handleGoogleLogin = () => {
-    const approvedUser = users.find(u => u.status === UserStatus.APPROVED);
-    if (approvedUser) onLoginSuccess(approvedUser);
+    setError('');
+    // Simulação de login Google: verifica se o utilizador existe e está aprovado
+    // Para fins de teste, o admin principal está sempre disponível via email
+    const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+    if (user) {
+      if (user.status === UserStatus.APPROVED) {
+        onLoginSuccess(user);
+      } else {
+        setError('Conta Google encontrada mas pendente de aprovação.');
+      }
+    } else {
+      setError('Conta Google não registada. Por favor, crie uma conta primeiro.');
+    }
   };
 
   const renderContent = () => {
     if (mode === 'pending') {
       return (
-        <div className="text-center">
+        <div className="text-center animate-in fade-in zoom-in-95">
+            <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center text-blue-600 mx-auto mb-6">
+                <CheckCircleIcon />
+            </div>
             <h2 className="text-2xl font-bold text-slate-800 mb-4">Registo Submetido</h2>
-            <p className="text-slate-500 text-sm mb-6">A sua conta foi criada com sucesso e está agora pendente de aprovação por um administrador. Será notificado quando a sua conta for ativada.</p>
-            <button onClick={() => setMode('login')} className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold">
+            <p className="text-slate-500 text-sm mb-8 leading-relaxed">
+              A sua conta foi criada com sucesso e está agora aguardando ativação por parte do CRA. 
+              Poderá fazer login assim que for aprovado.
+            </p>
+            <button onClick={() => setMode('login')} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold shadow-lg shadow-blue-100 transition-all hover:bg-blue-700">
                 Voltar ao Login
             </button>
         </div>
@@ -214,17 +231,25 @@ const AuthPage: React.FC<{
               placeholder="••••••••"
             />
           </div>
-          {error && <p className="text-xs text-rose-500 font-bold text-center">{error}</p>}
-          <button type="submit" className="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold shadow-xl shadow-blue-100 transition-all active:scale-95">
+          {error && (
+            <div className="p-3 bg-rose-50 border border-rose-100 rounded-xl">
+              <p className="text-xs text-rose-500 font-bold text-center">{error}</p>
+            </div>
+          )}
+          <button type="submit" className="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold shadow-xl shadow-blue-100 transition-all active:scale-95 hover:bg-blue-700">
             {mode === 'login' ? 'Entrar' : 'Criar Conta'}
           </button>
         </form>
         <div className="relative my-6">
           <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-200" /></div>
-          <div className="relative flex justify-center text-xs"><span className="bg-white px-2 text-slate-400">ou</span></div>
+          <div className="relative flex justify-center text-xs"><span className="bg-white px-2 text-slate-400 font-medium">ou continuar com</span></div>
         </div>
-        <button onClick={handleGoogleLogin} className="w-full flex items-center justify-center gap-3 bg-white border border-slate-200 text-slate-700 py-3 rounded-2xl font-bold text-sm hover:bg-slate-50 transition-all">
-          <GoogleIcon /><span>Entrar com Google</span>
+        <button 
+          type="button"
+          onClick={handleGoogleLogin} 
+          className="w-full flex items-center justify-center gap-3 bg-white border border-slate-200 text-slate-700 py-3 rounded-2xl font-bold text-sm hover:bg-slate-50 transition-all"
+        >
+          <GoogleIcon /><span>Google Account</span>
         </button>
       </>
     );
@@ -236,21 +261,21 @@ const AuthPage: React.FC<{
       <div className="w-full max-w-md">
         <div className="text-center mb-10">
           <div className="inline-flex items-center justify-center w-20 h-20 bg-white rounded-3xl shadow-md mb-4"><WavesIcon /></div>
-          <h1 className="text-4xl font-bold font-outfit text-slate-900">Bem-vindo ao SwimRef</h1>
-          <p className="text-slate-500 mt-2">A sua plataforma de gestão de árbitros de natação.</p>
+          <h1 className="text-4xl font-bold font-outfit text-slate-900">SwimRef</h1>
+          <p className="text-slate-500 mt-2">Plataforma Oficial de Arbitragem</p>
         </div>
         <div className="bg-white p-8 rounded-3xl shadow-xl border border-slate-200/50">
           {renderContent()}
         </div>
         {mode !== 'pending' && (
-          <div className="text-center mt-6 text-xs">
+          <div className="text-center mt-6 text-sm text-slate-500">
             {mode === 'login' ? (
               <>
-                Não tem uma conta? <button onClick={() => { setMode('register'); setError('')}} className="font-bold text-blue-600 hover:underline">Registe-se</button>
+                Ainda não tem conta? <button onClick={() => { setMode('register'); setError('')}} className="font-bold text-blue-600 hover:underline">Registe-se aqui</button>
               </>
             ) : (
               <>
-                Já tem uma conta? <button onClick={() => { setMode('login'); setError('')}} className="font-bold text-blue-600 hover:underline">Entre aqui</button>
+                Já faz parte da equipa? <button onClick={() => { setMode('login'); setError('')}} className="font-bold text-blue-600 hover:underline">Entre aqui</button>
               </>
             )}
           </div>
@@ -262,13 +287,22 @@ const AuthPage: React.FC<{
 
 
 const App: React.FC = () => {
-  const [users, setUsers] = useState<User[]>(INITIAL_USERS);
+  // Carrega utilizadores do localStorage ou usa os iniciais
+  const [users, setUsers] = useState<User[]>(() => {
+    const saved = localStorage.getItem('swimref-users-list');
+    return saved ? JSON.parse(saved) : INITIAL_USERS;
+  });
+
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
-    // Tenta carregar o utilizador do localStorage ao iniciar
-    const savedUser = localStorage.getItem('swimref-user');
+    const savedUser = localStorage.getItem('swimref-current-user');
     return savedUser ? JSON.parse(savedUser) : null;
   });
-  const [competitions, setCompetitions] = useState<Competition[]>(INITIAL_COMPETITIONS);
+
+  const [competitions, setCompetitions] = useState<Competition[]>(() => {
+    const saved = localStorage.getItem('swimref-competitions-list');
+    return saved ? JSON.parse(saved) : INITIAL_COMPETITIONS;
+  });
+
   const [craMembers, setCraMembers] = useState<CRAMember[]>(INITIAL_CRA_MEMBERS);
   const [craConfig, setCraConfig] = useState<CRAConfig>(INITIAL_CRA_CONFIG);
   const [selectedCompId, setSelectedCompId] = useState<string | null>(null);
@@ -290,15 +324,26 @@ const App: React.FC = () => {
     role: currentUser?.role || 'Árbitro'
   });
   const [isProfileUpdated, setIsProfileUpdated] = useState(false);
+
+  const [isBriefingModalOpen, setBriefingModalOpen] = useState(false);
+  const [briefingContent, setBriefingContent] = useState('');
+  const [isBriefingLoading, setBriefingLoading] = useState(false);
   
+  // Efeitos para persistência de dados
+  useEffect(() => {
+    localStorage.setItem('swimref-users-list', JSON.stringify(users));
+  }, [users]);
+
+  useEffect(() => {
+    localStorage.setItem('swimref-competitions-list', JSON.stringify(competitions));
+  }, [competitions]);
+
   useEffect(() => {
     if (currentUser) {
-      // Guarda o utilizador no localStorage sempre que ele muda
-      localStorage.setItem('swimref-user', JSON.stringify(currentUser));
+      localStorage.setItem('swimref-current-user', JSON.stringify(currentUser));
       setEditProfile({ name: currentUser.name, role: currentUser.role });
     } else {
-      // Remove o utilizador do localStorage se ele fizer logout
-      localStorage.removeItem('swimref-user');
+      localStorage.removeItem('swimref-current-user');
     }
   }, [currentUser]);
 
@@ -628,6 +673,21 @@ const App: React.FC = () => {
       addNotification('Documento Removido', 'O documento foi removido com sucesso.', 'warning');
   };
 
+  const handleGenerateBriefing = async () => {
+    if (!selectedComp) return;
+    setBriefingModalOpen(true);
+    setBriefingLoading(true);
+
+    const attendees = users.filter(user => 
+        selectedComp.rsvps.some(rsvp => rsvp.userId === user.id && rsvp.status === RSVPStatus.ATTENDING)
+    );
+
+    const briefing = await generateCompetitionBriefing(selectedComp, attendees);
+    setBriefingContent(briefing);
+    setBriefingLoading(false);
+  };
+
+
   if (!currentUser) {
     return <AuthPage users={users} onLoginSuccess={setCurrentUser} onRegister={handleRegisterUser} />;
   }
@@ -921,6 +981,7 @@ const App: React.FC = () => {
             <div className="flex items-center gap-2 shrink-0">
               {canManage && <button onClick={handleEditClick} className="p-3 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-2xl transition-all border border-transparent hover:border-blue-100" title="Editar Competição"><EditIcon /></button>}
               {isAdmin && <button onClick={() => { setCompToDeleteId(selectedComp.id); setShowDeleteModal(true); }} className="p-3 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-2xl transition-all border border-transparent hover:border-rose-100" title="Eliminar Competição"><TrashIcon /></button>}
+              {isAdmin && <button onClick={handleGenerateBriefing} className="p-3 text-slate-400 hover:text-purple-600 hover:bg-purple-50 rounded-2xl transition-all border border-transparent hover:border-purple-100" title="Gerar Briefing com IA"><SparklesIcon /></button>}
               <button onClick={handleGetDirections} className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-2xl font-bold transition-all shadow-lg shadow-blue-100">
                 <MapPinIcon />
                 <span>Obter Direções</span>
@@ -1070,6 +1131,13 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col transition-colors duration-300">
+      <BriefingModal 
+        isOpen={isBriefingModalOpen} 
+        onClose={() => setBriefingModalOpen(false)}
+        content={briefingContent}
+        isLoading={isBriefingLoading}
+      />
+      
       {activeToast && (
         <div className="fixed top-6 right-6 z-[100] animate-in slide-in-from-right-10">
           <div className={`p-4 rounded-2xl shadow-2xl border flex items-start gap-4 max-w-xs ${activeToast.type === 'success' ? 'bg-emerald-600 border-emerald-500 text-white' : 'bg-blue-600 border-blue-500 text-white'}`}>
