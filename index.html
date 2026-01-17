@@ -17,6 +17,10 @@
       font-family: 'Outfit', sans-serif;
     }
   </style>
+  <script>
+    // Previne erro fatal se a variável process não estiver definida no browser (comum em deploys Vercel/Vite)
+    window.process = window.process || { env: {} };
+  </script>
 <script type="importmap">
 {
   "imports": {
@@ -30,5 +34,7 @@
 </head>
 <body class="bg-slate-50 text-slate-900">
   <div id="root"></div>
+  <!-- Script de entrada essencial para iniciar a aplicação React -->
+  <script type="module" src="/index.tsx"></script>
 </body>
 </html>
