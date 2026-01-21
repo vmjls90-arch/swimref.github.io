@@ -12,6 +12,8 @@ export enum UserStatus {
 
 export type UserRole = 'Administrador' | 'Árbitro';
 
+export type CompetitionModality = "Natação Pura" | "Águas Abertas" | "Natação Adaptada";
+
 export interface RSVP {
   id: string;
   userId: string;
@@ -43,9 +45,9 @@ export interface Competition {
   name: string;
   date: string;
   location: string;
-  poolType: '25m' | '50m';
   description: string;
   level: 'Clube' | 'Regional' | 'Nacional' | 'Internacional';
+  modality: CompetitionModality;
   isPaid: boolean;
   paymentHistory: PaymentLog[];
   rsvps: RSVP[];
@@ -67,14 +69,15 @@ export interface CRAConfig {
   administrativeEmail: string;
 }
 
+export interface NotificationChannel {
+  toast: boolean;
+  email: boolean;
+}
+
 export interface NotificationPreferences {
-  newCompetitions: boolean;
-  rsvpChanges: boolean;
-  paymentUpdates: boolean;
-  channels: {
-    toast: boolean;
-    email: boolean;
-  };
+  newCompetitions: NotificationChannel;
+  rsvpChanges: NotificationChannel;
+  paymentUpdates: NotificationChannel;
 }
 
 export interface User {
@@ -89,10 +92,12 @@ export interface User {
 
 export interface Notification {
   id: string;
+  recipientId: string;
   title: string;
   message: string;
   timestamp: string;
   isRead: boolean;
   type: 'info' | 'success' | 'warning';
   category?: 'newCompetition' | 'rsvpChange' | 'paymentUpdate';
+  linkTo?: string; // e.g., competition ID
 }

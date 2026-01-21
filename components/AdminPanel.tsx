@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { Competition, User, UserRole, RSVPStatus, UserStatus, CRAMember, CRAConfig } from '../types';
-import { ShieldIcon, EditIcon, ChevronLeftIcon, ChevronRightIcon, DownloadIcon, TrendingUpIcon, TrashIcon, XIcon, CheckCircleIcon, UserIcon, MailIcon, PhoneIcon, CameraIcon } from './Icons';
+import { ShieldIcon, EditIcon, ChevronLeftIcon, ChevronRightIcon, DownloadIcon, TrendingUpIcon, TrashIcon, XIcon, CheckCircleIcon, UserIcon, MailIcon, PhoneIcon, CameraIcon, SearchIcon } from './Icons';
 
 interface AdminPanelProps {
   competitions: Competition[];
@@ -77,6 +77,11 @@ const PaginationControls: React.FC<PaginationControlsProps> = ({ totalItems, ite
 const AdminPanel: React.FC<AdminPanelProps> = ({ competitions, users, craMembers, craConfig, onUpdateUser, onUpdateCRAMember, onUpdateCRAConfig, onDeleteUser, onApproveUser, currentUser }) => {
   const [activeTab, setActiveTab] = useState<'competitions' | 'users' | 'cra' | 'statistics'>('competitions');
   const [selectedYear, setSelectedYear] = useState<string>('all');
+  const [competitionLevelFilter, setCompetitionLevelFilter] = useState<string>('all');
+  const [userStatusFilter, setUserStatusFilter] = useState<string>('all');
+  const [userRoleFilter, setUserRoleFilter] = useState<string>('all');
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+
   const [statsSelectedYear, setStatsSelectedYear] = useState<string>('all');
 
   const [competitionsPage, setCompetitionsPage] = useState(1);
@@ -94,10 +99,15 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ competitions, users, craMembers
   
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
+  const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
 
   useEffect(() => {
     setCompetitionsPage(1);
-  }, [selectedYear]);
+  }, [selectedYear, competitionLevelFilter]);
+
+  useEffect(() => {
+    setUsersPage(1);
+  }, [userStatusFilter, userRoleFilter, userSearchQuery]);
 
   const handleEditUser = (user: User) => {
     setEditingUserId(user.id);
@@ -158,11 +168,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ competitions, users, craMembers
 
   const openDeleteModal = (user: User) => {
     setUserToDelete(user);
+    setDeleteConfirmationText('');
     setIsDeleteModalOpen(true);
   };
   
   const confirmDelete = () => {
-    if (userToDelete) {
+    if (userToDelete && deleteConfirmationText === userToDelete.name) {
       onDeleteUser(userToDelete.id);
     }
     setIsDeleteModalOpen(false);
@@ -176,21 +187,43 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ competitions, users, craMembers
   }, [competitions]);
 
   const filteredCompetitions = useMemo(() => {
-    if (selectedYear === 'all' || !competitions) {
-      return competitions || [];
+    let tempCompetitions = competitions || [];
+    if (selectedYear !== 'all') {
+      tempCompetitions = tempCompetitions.filter(c => new Date(c.date).getFullYear().toString() === selectedYear);
     }
-    return competitions.filter(c => new Date(c.date).getFullYear().toString() === selectedYear);
-  }, [competitions, selectedYear]);
+    if (competitionLevelFilter !== 'all') {
+        tempCompetitions = tempCompetitions.filter(c => c.level === competitionLevelFilter);
+    }
+    return tempCompetitions;
+  }, [competitions, selectedYear, competitionLevelFilter]);
 
   const paginatedCompetitions = useMemo(() => {
       const startIndex = (competitionsPage - 1) * ITEMS_PER_PAGE;
       return filteredCompetitions.slice(startIndex, startIndex + ITEMS_PER_PAGE);
   }, [filteredCompetitions, competitionsPage]);
+  
+  const filteredUsers = useMemo(() => {
+      let tempUsers = users || [];
+      if (userSearchQuery) {
+        const query = userSearchQuery.toLowerCase();
+        tempUsers = tempUsers.filter(u =>
+          u.name.toLowerCase().includes(query) ||
+          u.email.toLowerCase().includes(query)
+        );
+      }
+      if (userStatusFilter !== 'all') {
+          tempUsers = tempUsers.filter(u => u.status === userStatusFilter);
+      }
+      if (userRoleFilter !== 'all') {
+          tempUsers = tempUsers.filter(u => u.role === userRoleFilter);
+      }
+      return tempUsers;
+  }, [users, userStatusFilter, userRoleFilter, userSearchQuery]);
 
   const paginatedUsers = useMemo(() => {
       const startIndex = (usersPage - 1) * ITEMS_PER_PAGE;
-      return (users || []).slice(startIndex, startIndex + ITEMS_PER_PAGE);
-  }, [users, usersPage]);
+      return filteredUsers.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [filteredUsers, usersPage]);
   
   const statisticsData = useMemo(() => {
     if (!competitions || !users) return [];
@@ -328,7 +361,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ competitions, users, craMembers
   };
 
   const handleExportUsers = (format: 'csv' | 'pdf') => {
-    const dataToExport = users.map(u => ({
+    const dataToExport = filteredUsers.map(u => ({
         nome: u.name,
         email: u.email,
         funcao: u.role,
@@ -396,21 +429,34 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ competitions, users, craMembers
                   <button onClick={() => handleExportCompetitions('csv')} className="flex items-center gap-2 px-3 py-2 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold hover:bg-slate-200 transition-colors"><DownloadIcon /> Exportar CSV</button>
                   <button onClick={() => handleExportCompetitions('pdf')} className="flex items-center gap-2 px-3 py-2 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold hover:bg-slate-200 transition-colors"><DownloadIcon /> Exportar PDF</button>
                 </div>
-                <select 
-                  value={selectedYear} 
-                  onChange={e => setSelectedYear(e.target.value)}
-                  className="p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  {competitionYears.map(year => (
-                    <option key={year} value={year}>{year === 'all' ? 'Todos os Anos' : year}</option>
-                  ))}
-                </select>
+                <div className="flex items-center gap-4">
+                    <select 
+                      value={competitionLevelFilter} 
+                      onChange={e => setCompetitionLevelFilter(e.target.value)}
+                      className="p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="all">Todos os Níveis</option>
+                      <option value="Clube">Clube</option>
+                      <option value="Regional">Regional</option>
+                      <option value="Nacional">Nacional</option>
+                      <option value="Internacional">Internacional</option>
+                    </select>
+                    <select 
+                      value={selectedYear} 
+                      onChange={e => setSelectedYear(e.target.value)}
+                      className="p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      {competitionYears.map(year => (
+                        <option key={year} value={year}>{year === 'all' ? 'Todos os Anos' : year}</option>
+                      ))}
+                    </select>
+                </div>
               </div>
               <div className="overflow-x-auto rounded-2xl border">
                 <table className="min-w-full divide-y divide-slate-100">
                   <thead className="bg-slate-50">
                     <tr>
-                      <th scope="col" className="py-3.5 px-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Nome da Prova</th>
+                      <th scope="col" className="py-3.5 px-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Nome da Competição</th>
                       <th scope="col" className="py-3.5 px-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Local</th>
                       <th scope="col" className="py-3.5 px-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Responsável CRA</th>
                       <th scope="col" className="py-3.5 px-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Data</th>
@@ -432,7 +478,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ competitions, users, craMembers
                       </tr>
                     )) : (
                       <tr>
-                        <td colSpan={5} className="text-center py-10 text-sm text-slate-400">Nenhuma competição encontrada para o ano selecionado.</td>
+                        <td colSpan={5} className="text-center py-10 text-sm text-slate-400">Nenhuma competição encontrada para os filtros selecionados.</td>
                       </tr>
                     )}
                   </tbody>
@@ -449,10 +495,38 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ competitions, users, craMembers
 
           {activeTab === 'users' && (
             <div className="animate-in fade-in-5">
-               <div className="flex justify-start mb-4">
-                   <div className="flex items-center gap-2">
-                      <button onClick={() => handleExportUsers('csv')} className="flex items-center gap-2 px-3 py-2 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold hover:bg-slate-200 transition-colors"><DownloadIcon /> Exportar CSV</button>
-                      <button onClick={() => handleExportUsers('pdf')} className="flex items-center gap-2 px-3 py-2 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold hover:bg-slate-200 transition-colors"><DownloadIcon /> Exportar PDF</button>
+               <div className="flex flex-wrap justify-between items-center mb-4 gap-4">
+                  <div className="relative flex-grow max-w-sm">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400"><SearchIcon /></div>
+                      <input 
+                          type="text" 
+                          value={userSearchQuery}
+                          onChange={e => setUserSearchQuery(e.target.value)}
+                          placeholder="Procurar por nome ou email..."
+                          className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <select 
+                      value={userStatusFilter} 
+                      onChange={e => setUserStatusFilter(e.target.value)}
+                      className="p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="all">Todos os Estados</option>
+                      <option value={UserStatus.APPROVED}>Aprovado</option>
+                      <option value={UserStatus.PENDING}>Pendente</option>
+                    </select>
+                     <select 
+                      value={userRoleFilter} 
+                      onChange={e => setUserRoleFilter(e.target.value)}
+                      className="p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="all">Todas as Funções</option>
+                      <option value="Administrador">Administrador</option>
+                      <option value="Árbitro">Árbitro</option>
+                    </select>
+                    <button onClick={() => handleExportUsers('csv')} className="flex items-center gap-2 px-3 py-2 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold hover:bg-slate-200 transition-colors"><DownloadIcon /> CSV</button>
+                    <button onClick={() => handleExportUsers('pdf')} className="flex items-center gap-2 px-3 py-2 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold hover:bg-slate-200 transition-colors"><DownloadIcon /> PDF</button>
                   </div>
               </div>
               <div className="overflow-x-auto rounded-2xl border">
@@ -525,14 +599,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ competitions, users, craMembers
                       </tr>
                     )) : (
                       <tr>
-                        <td colSpan={5} className="text-center py-10 text-sm text-slate-400">Nenhum utilizador encontrado.</td>
+                        <td colSpan={5} className="text-center py-10 text-sm text-slate-400">Nenhum utilizador encontrado para os filtros selecionados.</td>
                       </tr>
                     )}
                   </tbody>
                 </table>
               </div>
                <PaginationControls
-                  totalItems={users.length}
+                  totalItems={filteredUsers.length}
                   itemsPerPage={ITEMS_PER_PAGE}
                   currentPage={usersPage}
                   onPageChange={setUsersPage}
@@ -714,7 +788,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ competitions, users, craMembers
                                   <div key={seasonStat.season}>
                                       <div className="flex justify-between items-center text-xs mb-1">
                                           <span className="font-bold text-slate-600">Época {seasonStat.season}</span>
-                                          <span className="text-slate-500">{seasonStat.attended} / {seasonStat.total} provas</span>
+                                          <span className="text-slate-500">{seasonStat.attended} / {seasonStat.total} competições</span>
                                       </div>
                                       <div className="w-full bg-slate-200 rounded-full h-2.5">
                                           <div 
@@ -737,18 +811,38 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ competitions, users, craMembers
       {isDeleteModalOpen && userToDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm">
           <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl animate-in zoom-in-95 overflow-hidden">
-            <div className="p-8 text-center">
-              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-rose-100 text-rose-600">
-                <TrashIcon />
+            <div className="p-8">
+              <div className="text-center">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-rose-100 text-rose-600">
+                  <TrashIcon />
+                </div>
+                <h2 className="text-2xl font-bold font-outfit mt-4 text-slate-900">Remover Utilizador</h2>
+                <p className="text-sm text-slate-500 mt-2">
+                  Esta ação é irreversível e irá remover permanentemente a conta de <span className="font-bold">{userToDelete.name}</span>.
+                </p>
               </div>
-              <h2 className="text-2xl font-bold font-outfit mt-4 text-slate-900">Remover Utilizador</h2>
-              <p className="text-sm text-slate-500 mt-2">Tem a certeza que quer remover a conta de <span className="font-bold">{userToDelete.name}</span>? Esta ação não pode ser revertida.</p>
+              <div className="mt-6 space-y-2">
+                <label htmlFor="delete-confirm" className="text-xs font-bold text-slate-500">
+                  Para confirmar, por favor escreva "<span className="font-bold text-rose-600">{userToDelete.name}</span>" na caixa abaixo.
+                </label>
+                <input 
+                  id="delete-confirm"
+                  type="text"
+                  value={deleteConfirmationText}
+                  onChange={(e) => setDeleteConfirmationText(e.target.value)}
+                  className="w-full p-3 bg-slate-100 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-rose-500"
+                />
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-4 p-6 bg-slate-50">
               <button onClick={() => setIsDeleteModalOpen(false)} className="py-3 bg-white border border-slate-200 text-slate-700 rounded-2xl font-bold text-sm hover:bg-slate-100 transition-colors">
                 Cancelar
               </button>
-              <button onClick={confirmDelete} className="py-3 bg-rose-600 text-white rounded-2xl font-bold text-sm hover:bg-rose-700 transition-colors">
+              <button 
+                onClick={confirmDelete} 
+                disabled={deleteConfirmationText !== userToDelete.name}
+                className="py-3 bg-rose-600 text-white rounded-2xl font-bold text-sm hover:bg-rose-700 transition-colors disabled:bg-slate-300 disabled:cursor-not-allowed"
+              >
                 Confirmar Remoção
               </button>
             </div>
